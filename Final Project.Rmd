@@ -1,0 +1,546 @@
+---
+title: "What Makes White Wine Taste Good?"
+author: "Dominic Nguyen"
+date: "12/31/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(results = "hide", message = FALSE, 
+                      warning = FALSE, fig.width=10, fig.height=6)
+```
+
+In this investigation, R was employed on white wine data to determine which chemical properties affected wine quality. 
+
+## Data & Library Dependencies
+
+The following R libraries were used in addition to RStudio to conduct the analysis: ggplot2, GGally, scales, memisc, psych, RColorBrewer, gridExtra, and dplyr.
+
+```{r}
+# Load data & dependent libraries
+wines <- read.csv('wineQualityWhites.csv')
+
+library(ggplot2)
+library(GGally)
+library(scales)
+library(memisc)
+library(psych)
+library(RColorBrewer)
+library(gridExtra)
+library(dplyr)
+```
+
+## Data
+
+White wine data was obtained from a 2009 study entitled "Modeling wine preferences by data mining from physicochemical properties" by Cortez et al. This data has 4898 observations and 13 separate variables.
+
+```{r}
+# Find number of observations and variables
+nrow(wines)
+ncol(wines)
+```
+
+## Initial Variable Analysis
+
+To start, a correlation matrix was generated for all 13 variables. After analyzing the resulting correlation matrix (attached), the three variables affecting wine quality the most (based on magnitude of correlation coefficient) were graphed in another correlation matrix in Figure 1.
+
+#### Figure 1 - Correlation Matrix
+```{r}
+# Keep 3 most correlated variables to quality
+wines_3_most_correlated <- wines[c("density", "alcohol", "chlorides",
+                                   "quality")]
+
+# Plot correlation matrix with 3 most correlated variables to quality
+ggpairs(wines_3_most_correlated,
+        lower = list(continuous = wrap("points", shape = I('.'))),
+        upper = list(combo = wrap("box", outlier.shape = I('.'))))
+```
+
+The three variables are alcohol content, density, and chlorides content. These effect of these variables on wine quality was thoroughly discussed in the report.
+
+### Wine Quality
+Quality recorded from a scale of 1 to 10 was used to rank the 'tastiness' of wine. The value of the quality is taken from the median of three wine expert ratings. The distribution of wine quality for all wine observations can be seen with a histogram in Figure 2.
+
+#### Figure 2 - Wine Quality Histogram
+```{r}
+# Graph quality histogram
+ggplot(aes(quality), data = wines) +
+  geom_histogram(fill = I('cornflowerblue'), binwidth = 1, alpha = 0.75) +
+  xlab('Quality') +
+  ylab('Count')
+
+# Calculate quality statistics
+summary(wines$quality)
+```
+
+From Figure 2, it can be observed that wine quality is normally distributed with a median wine quality of 6 and mean wine quality of 5.878. The lowest wine quality of 3 and highest wine quality of 9. Additionaly, wine quality appears to only take on integer values. A quick look into the data set confirms this suspicion. 
+
+#### Figure 3 - Wine Quality Bar Chart
+```{r}
+# Graph quality bar chart
+ggplot(aes(factor(quality)), data = wines) +
+  geom_bar(fill = I('cornflowerblue'), alpha = 0.75) +
+  xlab('Quality') +
+  ylab('Count')
+```
+
+As expected, after successfully factoring the quality variable, the counts in a bar chart in Figure 3 remain equal to the counts in the previously generated histogram.
+
+### Density
+Though alcohol appears to be more highly correlated with quality than density is, density will be explored first as it is affected by other variables. As indicated in the attached description of attributes, density is mainly correlated to two other variables in the dataset, alcohol and sugar content. All of these relationships will be further explored in the following section.
+
+Density is the mass of the substance divided by its volume. From the matrix, density and quality has a R-squared value of -0.307, suggesting a moderately negative correlation between the two variables. 
+
+#### Figure 4 - Density Histogram
+```{r}
+# Plot histogram of density
+ggplot(aes(density), data = wines) +
+  geom_histogram(fill = I('darkorange'), alpha = 0.75) +
+  xlab('Density (g/mL)') +
+  ylab('Count')
+
+# Calculated density statistics
+summary(wines$density)
+```
+
+From Figure 4, density is mostly normally distributed with a few amount wines with densities higher than 1.01 g/mL that are likely outliers. The wines have a median density is 0.9937 g/mL and a mean density is 0.9940 g/mL, suggesting that the data has a few outliers with higher densities. These outliers can be identified by viewing a box plot in Figure 5.
+
+#### Figure 5 - Density Box Plot
+```{r}
+# Calculate and print outlier upper bound for density variable
+density_outlier_upper_bound <- 1.5*IQR(wines$density) + 
+  quantile(wines$density, 0.75)
+print(density_outlier_upper_bound)
+
+# Graph density boxplot and label outliers
+ggplot(aes("", density), data = wines) + 
+  geom_boxplot(color = I('darkorange'), fill = I('darkorange'), alpha = 0.3) +
+  geom_text(aes(label = ifelse((density > density_outlier_upper_bound), 
+                               density ,"")), hjust = 1.2) +
+  xlab('') +
+  ylab('Density (g/mL)') +
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "black",
+               shape = 5, 
+               size = 4)
+
+# Store data w/o density outliers into new dataframe
+wines_no_density_outliers <- subset(wines,
+                                    density <= density_outlier_upper_bound)
+
+# Calculate Pearson correlationcoefficient between density and quality
+# w/ and w/o density outliers
+with(wines, cor.test(density, quality))
+with(wines_no_density_outliers, cor.test(density, quality))
+
+nrow(wines)
+nrow(wines_no_density_outliers)
+```
+
+Figure 5 shows there are 3 outliers with higher densities in the wine density data. These 3 wines have densities of 1.003 g/mL, 1.010 g/mL, and 1.039 g/mL. After removing these outliers, the Pearson correlation coefficient improved from -0.307 to -0.318. Also, in this box plot, the mean density, represented as a black diamond, can be seen to be slightly above the median density as stated previously.
+
+#### Figure 6 - Density Box Plots by Quality
+```{r}
+# Plot density box plots by quality
+ggplot(aes(factor(quality), density), data = wines_no_density_outliers) + 
+  geom_boxplot(color = I('darkorange'), fill = I('darkorange'), alpha = 0.3) +
+  xlab('Quality') +
+  ylab('Density (g/mL)') +
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "black",
+               shape = 5, 
+               size = 4)
+  
+# Calculate density statistics by quality
+describeBy(wines$density, group = wines$quality, mat = TRUE, digits = 4)
+```
+
+After graphing the box plots of density data (w/o density outliers found previously) by quality in Figure 6, it can be seen that, on average, wines with higher quality ratings had lower densities. Wines with a quality of 9 had an average density of 0.9915 g/mL while wines with a quality of 5 had an average density of 0.9953 g/mL. 
+
+### Alcohol
+The alcohol percentage by volume (ABV) is a well-known value to compare 'qualities' of alcoholic beverages. Alcohol was the one of the variables that affected density according to the attached description of attributes.
+
+#### Figure 7 - Alcohol Histogram
+```{r}
+# Plot alcohol histogram
+ggplot(aes(alcohol), data = wines) +
+  geom_histogram(fill = I('firebrick3'), alpha = 0.75) +
+  xlab('ABV (%)') +
+  ylab('Count')
+
+# Calculate alcohol statistics
+summary(wines$alcohol)
+```
+
+From Figure 7, alcohol content is slightly skewed right with the minimum ABV of 3.0% and a maximum ABV of 9.0%. Skewedness in the distribution is confirmed with the summary table where it can be observed that the mean ABV of 10.5% is greater than the median ABV of 10.4%. Additionally, it appears that three separate peaks occur within the distribution at around 9.5%, 11%, and 12.5%. A deeper analysis with smaller binwidths provides further information.
+
+#### Figure 8 - Alcohol Histogram with Adjusted Binwidth
+```{r}
+# Change binwidth of alcohol histogram
+ggplot(aes(alcohol), data = wines_no_density_outliers) +
+  geom_histogram(binwidth = 0.1, fill = I('firebrick3'), alpha = 0.75) +
+  xlab('ABV (%)') +
+  ylab('Count')
+```
+
+Using a binwidth of 0.1 since alcohol content is normally reported to the tenth decimal place, it can be seen in Figure 8 that the initial three peaks disappear except for the peak around 9.5% ABV. More importantly, it becomes apparent that more wines take on alcohol values with a tenths place ending in 0 or 5. For example, it can be seen that individual peaks within the distribution occur with alcohol contents ending with 0 or 5.
+
+#### Figure 9 - Alcohol Box Plots by Quality
+```{r}
+ggplot(aes(factor(quality), alcohol), data = wines_no_density_outliers) + 
+  geom_boxplot(color = I('firebrick3'), fill = I('firebrick3'), alpha = 0.3) +
+  xlab('Quality') +
+  ylab('ABV (%)') +
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "black",
+               shape = 5, 
+               size = 4)
+
+# Calculate alcohol statistics by quality
+describeBy(wines_no_density_outliers$alcohol, wines_no_density_outliers$quality)
+```
+
+Figure 9 displays the distribution of wines with different quality in terms of alcohol content in a boxplot. Quality was converted into a categorical variable using `factor` in order to achieve the boxplot. Here it can be seen that the wines with the highest quality ratings have greater alcohol contents on average. For example, wines with the highest quality rating of 9 had an average ABV of 12.18% while wines with a quality rating of 5 have an average ABV of 9.81%. However, there is an exception for wines that received a quality rating of 3 or 4. These wines had greater alcohol content than wines that had a quality rating of 5.
+
+Another interesting finding is that wines of the highest quality (rating of 9) had a smaller variance in alcohol content than lower rated wines. While wines of a quality rating of 9 had a median absolute deviation (MAD, measure of deviation unaffected by outliers) of 0.3, wines of a quality rating of 5 had a MAD of 0.74.
+
+#### Figure 10 - Alcohol vs Density Preliminary Scatter Plot
+```{r}
+# Plot alcohol vs density scatter plot
+ggplot(aes(density, alcohol), data = wines_no_density_outliers) + 
+  geom_jitter(width = 0.0001, height = 0.04,
+              alpha = 0.35, size = 2, color = I('firebrick3')) +
+  xlab('Density (g/mL)') +
+  ylab('ABV (%)') +
+  geom_smooth(method = "lm", se = FALSE, color = "firebrick4")
+
+# Calculate r-squared values of density-alcohol and alcohol-quality
+# w/ and w/o density outliers
+with(wines, cor.test(density, alcohol))
+with(wines_no_density_outliers, cor.test(density, alcohol))
+with(wines, cor.test(alcohol, quality))
+with(wines_no_density_outliers, cor.test(alcohol, quality))
+```
+
+From the matrix in Figure 1, it was determined that alcohol and density were highly correlated with one another. This relationship can be seen in Figure 10. After removing outliers found earlier in the density data, the Pearson Product Moment Correlation coefficient strengthened from -0.780 to -0.806, indicating alcohol and density are strongly negatively correlated. This means that wines with lower density will likely have higher amounts of alcohol. The removal of density outliers has minimal effect on the Pearson correlation between alcohol and quality, which remains at 0.436.
+
+### Residual Sugar
+According to the attached description of attributes, residual sugar is the amount of sugar left after fermentation ends. Most wines have at least 1 grams per liter of residual sugar. None of the wines in the data set are considered sweet (having greater than 45 g/L). Residual sugar was indicated as the other variable that significantly affects the density variable.
+
+#### Figure 11 - Residual Sugar Histogram
+```{r}
+# Plot residual sugar histogram
+ggplot(aes(residual.sugar), data = wines_no_density_outliers) +
+  geom_histogram(binwidth = 0.5, fill = I('plum'), alpha = 0.75) +
+  xlab('Residual Sugar Content (g/L)') +
+  ylab('Count')
+
+# Calculate sugar statistics
+summary(wines_no_density_outliers$residual.sugar)
+```
+
+From Figure 11 and using data with density outliers removed, residual sugar is mostly positively skewed with a median residual sugar content of 5.200 g/L while the mean residual sugar content is 6.361 g/L. 25% of wines have a residual sugar content greater than 9.900 g/L.  The lowest sugar content is 0.600 g/L while the greatest sugar content is 23.500 g/L.
+
+#### Figure 12 - Residual Sugar Box Plots by Quality
+```{r}
+# Plot box plots of sugar vs quality
+ggplot(aes(factor(quality), residual.sugar), data = wines_no_density_outliers) + 
+  geom_boxplot(color = I('plum'), fill = I('plum'), alpha = 0.3) +
+  xlab('Quality') +
+  ylab('Residual Sugar Content (g/L)') +
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "black",
+               shape = 5, 
+               size = 4)
+
+# Calculate sugar-density and sugar-quality r-squared value
+with(wines_no_density_outliers, cor.test(residual.sugar, density))
+with(wines_no_density_outliers, cor.test(residual.sugar, quality))
+```
+
+The effect of residual sugar on quality is minimal as shown in Figure 12. The Pearson correlation of residual sugar and quality is slightly negative at -0.100.
+
+#### Figure 13 - Residual Sugar Scatter Plot Outliers Removed
+```{r}
+# Calculate and print outlier upper bound for residual sugar content variable
+sugar_outlier_upper_bound <- 1.5*IQR(wines$residual.sugar) +
+  quantile(wines$residual.sugar, 0.75)
+print(sugar_outlier_upper_bound)
+
+# Store subset data with density and sugar outliers removed into new dataframe
+wines_no_density_and_sugar_outliers <-subset(
+  wines_no_density_outliers,
+  residual.sugar <=sugar_outlier_upper_bound)
+
+# Print number of sugar outliers removed
+print(nrow(wines_no_density_outliers) -
+        nrow(wines_no_density_and_sugar_outliers))
+
+# Plot scatter plot of sugar vs density
+ggplot(aes(residual.sugar, density),
+       data = wines_no_density_and_sugar_outliers) + 
+  geom_jitter(width = 0.1, height = 0.0001, alpha = 0.35, size = 2,
+              color = I('plum')) +
+  xlab('Residual Sugar Content (g/L)') +
+  ylab('Density (g/mL)') +
+  scale_x_continuous(limits = c(0, 22.5), breaks = seq(0, 22.5, by = 2.5)) +
+  scale_y_continuous(limits = c(0.98625, 1.0025),
+                     breaks = seq(0.9875, 1.0025, by = 0.0025)) +
+  geom_smooth(method = "lm", se = FALSE, color = "plum4")
+
+# Calculate sugar statistics and sugar-density r-squared values
+summary(wines_no_density_and_sugar_outliers$residual.sugar)
+with(wines_no_density_and_sugar_outliers, cor.test(residual.sugar, density))
+```
+
+After removing the two outliers detected in the residual sugar data, the Pearson correlation of between residual sugar and density remains high at 0.831. Figure 13 shows this positively strong correlation. 
+
+### Chlorides
+The chloride content variable measures the amount of salt in the wine in grams per liter. As the majority people know, saltiness can have a dramatic affect on the taste of food and drinks.
+
+#### Figure 14 - Chlorides Histogram
+```{r}
+# Plot chlorides histogram
+ggplot(aes(chlorides), data = wines) + 
+  geom_histogram(binwidth = 0.01, fill = I('aquamarine3'), alpha = 0.75) +
+  xlab('Chlorides Content (g/L)') +
+  ylab('Count')
+
+# Calculate chlorides statistics
+summary(wines$chlorides)
+```
+
+From Figure 14, it can be observed that chloride content is mostly normally distributed with a small amount of wines with chloride contents higher than 0.1 g/L. The median chloride content is 0.043 g/L while the mean chloride content is 0.046 g/L. Only 25% of wines have a chloride content greater than 0.05 g/L.
+
+#### Figure 15 - Chlorides Box Plots by Quality
+```{r}
+# Plot chlorides box plots by quality
+ggplot(aes(factor(quality), chlorides), data = wines) + 
+  geom_boxplot(color = I('aquamarine3'), fill = I('aquamarine3'), alpha = 0.3) +
+  xlab('Quality') +
+  ylab('Chlorides Content (g/L)') +
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "black",
+               shape = 5, 
+               size = 4) +
+  scale_y_continuous(limits = c(0, 0.075))
+
+# Calculate chlorides statistics by quality
+describeBy(wines_no_density_outliers$chlorides,
+           group = wines_no_density_outliers$quality,
+           mat = TRUE, digits = 4)
+
+# Find number of data points not shown in 
+print(nrow(subset(wines, wines$chlorides >= 0.075)))
+```
+
+After graphing the box plots of density data by chlorides and limiting chlorides content to 0.075 g/L in Figure 15, it can be seen that, on average, wines with higher quality ratings were less salty (lower chlorides content). Wines with a quality of 9 had an average chloride content of 0.0274 g/L while wines with a quality of 5 had an average chloride content of 0.0515 g/L Furthermore, no wines with a quality of 9 had a average chloride content above 0.046 g/L, the average chloride content of all wines in the data set. Better wines are also less salty more consistently; the MAD of chloride content decreases from 0.0111 g/L for a wine quality of 3 to only 0.0059 g/L for a wine quality of 9.
+
+It is important to note that 186 data points with chloride content greater than 0.075 g/L are not shown in Figure 15 to allow easy observation of mean and median chloride content by quality.
+
+#### Figure 16 - Chlorides vs Density Scatter Plot
+```{r}
+# Calculate and print outlier upper bound for chlorides variable
+chlorides_outlier_upper_bound <- 1.5*IQR(wines$chlorides) +
+  quantile(wines$chlorides, 0.75)
+print(chlorides_outlier_upper_bound)
+
+# Store subset data with density, sugar, and chlorides outliers removed into
+# new dataframe
+wines_no_density_sugar_chloride_outliers <- subset(
+  wines_no_density_and_sugar_outliers,
+  chlorides <= chlorides_outlier_upper_bound)
+
+# Print number of chlorides outliers removed
+print(nrow(wines_no_density_and_sugar_outliers) -
+        nrow(wines_no_density_sugar_chloride_outliers))
+
+# Plot scatter plot of chlorides vs density w/ only density and sugar outliers
+# removed
+chlorine_density_1 <- ggplot(aes(chlorides, density),
+                             data = wines_no_density_and_sugar_outliers) + 
+  geom_jitter(width = 0.001, height = 0.0001, alpha = 0.35, size = 2,
+              color = I('aquamarine3')) +
+  scale_color_brewer(type = 'div',
+                     palette="YlGn",
+                     guide = guide_legend(title = 'Quality', 
+                                          reverse = T,
+                                          override.aes = list(alpha = 1,
+                                                              size = 2))) +
+  xlab('Chlorides Content (g/L)') +
+  ylab('Density (g/mL)') +
+  scale_x_continuous(limits = c(0, 0.35), breaks = seq(0, 0.35, by = 0.05)) +
+  scale_y_continuous(limits = c(0.985, 1.0025), breaks = seq(0.985, 1.0025,
+                                                             by = 0.0025)) +
+  geom_smooth(method = "lm", se = FALSE, color = "aquamarine4")
+
+# Calculate r-squared value of density-chlorides w/ only density and sugar
+# outliers removed
+with(wines_no_density_and_sugar_outliers, cor.test(chlorides, density))
+with(wines_no_density_and_sugar_outliers, cor.test(chlorides, quality))
+
+chlorine_density_1
+```
+
+By just plotting the chlorides vs density data with only outliers in the density data removed in Figure 16, the relationship between chloride-density and chloride-quality appears minimal with a Pearson correlation of only 0.262 and -0.210, respectively. Significant overplotting on the left of the plot even after lowering the alpha parameter to 0.35 reiterates the majority of the data has chlorides contents of less than 0.100 g/L.
+
+#### Figure 17 - Chlorides vs Density Scatter Plot (Chloride Outliers Removed)
+```{r}
+# Plot chlorides vs density  scatter plot w/ density, sugar, and chloride
+# outliers removed
+chlorine_density_2 <- ggplot(aes(chlorides, density),
+                             data = wines_no_density_sugar_chloride_outliers) + 
+  scale_color_brewer(type = 'div',
+                     palette="YlGn",
+                     guide = guide_legend(title = 'Quality', 
+                                          reverse = T,
+                                          override.aes = list(alpha = 1,
+                                                              size = 2))) +
+  xlab('Chlorides Content (g/L)') +
+  ylab('Density (g/mL)') +
+  scale_x_continuous(limits = c(0.005, 0.075), breaks = seq(0.005, 0.075,
+                                                            by = 0.01)) +
+  scale_y_continuous(limits = c(0.985, 1.0025), breaks = seq(0.985, 1.0025,
+                                                             by = 0.0025))
+
+# Calculate r-squared value of density-chlorides w/ density, sugar, and chloride
+# outliers removed
+with(wines_no_density_sugar_chloride_outliers, cor.test(chlorides, density))
+# Calculate r-squared value of density-chlorides w/ density, sugar, and chloride
+# outliers removed
+with(wines_no_density_sugar_chloride_outliers, cor.test(chlorides, quality))
+
+chlorine_density_2 + geom_jitter(width = 0.001, height = 0.0001, alpha = 0.35,
+                                 size = 2,
+              color = I('aquamarine3')) + geom_smooth(method = "lm", se = FALSE,
+                                                      color = "aquamarine4")
+```
+
+After removing the outliers in the chloride data in addition to the density outliers in Figure 17, the relationship between chloride-density and chloride-quality strengthens with the Pearson correlation improving dramatically to 0.499 and -0.278, respectively. Though this indicates chloride is more correlated with density and quality for the majority of the data than originally perceived, it is important to note that 199 more data points have been removed through chloride outlier removal.
+
+### Average Alcohol and Average Residual Sugar
+The previous alcohol-density and sugar-density scatter plots contained many observations. In order to see the effect of alcohol and sugar on density more clearly, the average alcohol and average residual sugar contents were calculated for each density present in the wine data set without density, sugar, or chloride outliers.
+
+#### Figure 18 - Average Alcohol and Average Residual Sugar Scatter Plots with Density
+```{r}
+# Store avg sugar and alcohol by density into new dataframe
+wines_avg_alcohol_sugar <- wines_no_density_sugar_chloride_outliers %>%
+  group_by(density) %>%
+  summarise(alcohol_mean = mean(alcohol),
+            sugar_mean = mean(residual.sugar),
+            n = n()) %>%
+  arrange(density)
+
+# Generate alcohol_mean-density, sugar_mean-density alcohol_mean-sugar_mean
+# scatter plots
+alcohol_mean_density_scatter <- ggplot(aes(alcohol_mean, density),
+                             data = wines_avg_alcohol_sugar) + 
+  geom_jitter(alpha = 0.35, size = 2, color = I('goldenrod2')) +
+  xlab('Avg AVB (%)') +
+  ylab('Density (g/mL)') +
+  scale_x_continuous(limits = c(8, 14.5), breaks = seq(8, 14.5, by = 1)) +
+  scale_y_continuous(limits = c(0.985, 1.0025), breaks = seq(0.985, 1.0025,
+                                                             by = 0.0025)) +
+  geom_smooth(method = "lm", se = FALSE, color = "goldenrod4")
+  
+sugar_mean_density_scatter <- ggplot(aes(sugar_mean, density),
+                             data = wines_avg_alcohol_sugar) + 
+  geom_jitter(alpha = 0.35, size = 2, color = I('goldenrod2')) +
+  xlab('Avg Residual Sugar (g/L)') +
+  ylab('Density (g/mL)') +
+  scale_x_continuous(limits = c(0, 22.5), breaks = seq(0, 22.5, by = 7.5)) +
+  scale_y_continuous(limits = c(0.985, 1.0025), breaks = seq(0.985, 1.0025,
+                                                             by = 0.0025)) +
+  geom_smooth(method = "lm", se = FALSE, color = "goldenrod4")
+
+alcohol_mean_sugar_mean_scatter <- ggplot(aes(alcohol_mean, sugar_mean),
+                             data = wines_avg_alcohol_sugar) + 
+  geom_jitter(alpha = 0.35, size = 2, color = I('goldenrod2')) +
+  xlab('Avg AVB (%)') +
+  ylab('Avg Residual Sugar (g/L)') +
+  scale_x_continuous(limits = c(8, 14.5), breaks = seq(8, 14.5, by = 1)) +
+  scale_y_continuous(limits = c(0, 22.5), breaks = seq(0, 22.5, by = 2.5)) +
+  geom_smooth(method = "lm", se = FALSE, color = "goldenrod4")
+
+# Plot
+grid.arrange(alcohol_mean_density_scatter, sugar_mean_density_scatter,
+             alcohol_mean_sugar_mean_scatter, ncol = 3)
+
+# Calculate r-squared values for sugar_mean-density, alcohol_mean-density, 
+# and sugar_mean-alcohol mean
+with(wines_avg_alcohol_sugar, cor.test(sugar_mean, density))
+with(wines_avg_alcohol_sugar, cor.test(alcohol_mean, density))
+with(wines_avg_alcohol_sugar, cor.test(sugar_mean, alcohol_mean))
+```
+
+From Figure 18, average AVB, average residual sugar, and density appear to be highly correlated. The Pearson correlation coefficients for sugar_mean-density, alcohol_mean-density, and sugar_mean-alcohol_mean are 0.906, -0.901, and -0.686, respectively. Thus, negatively correlated alcohol and residual sugar content is present in most wines which amplifies the correlation of each variable to density.
+
+## Final Plots and Summary
+The main data insights can be extracted from this section.
+
+#### Figure 19 - Alcohol vs Density Final Scatter Plot
+```{r}
+# Plot scatter plot of alcohol-density with quality as a third variable
+ggplot(aes(density, alcohol), data = wines_no_density_sugar_chloride_outliers) + 
+  geom_jitter(width = 0.0001, height = 0.04, aes(color = factor(quality)),
+              alpha = 0.35, size = 2) +
+  scale_color_brewer(type = 'div',
+                     palette="YlOrBr",
+                     guide = guide_legend(title = 'Quality', 
+                                          reverse = T,
+                                          override.aes = list(alpha = 1,
+                                                              size = 2))) +
+  xlab('Density (g/mL)') +
+  ylab('ABV (%)') +
+  scale_x_continuous(limits = c(0.98625, 1.0025), breaks = seq(0.9875, 1.0025,
+                                                               by = 0.0025)) +
+  scale_y_continuous(limits = c(8, 14.5), breaks = seq(8, 14.5, by = 1))
+```
+
+In Figure 19, the scatterplot between alcohol and density is polished to include a third variable (quality) with density, sugar, and chlorides outliers removed. This multivariable plot not only shows how alcohol and density are correlated with one another but also how they are correlated with quality. Since the correlation coefficients of alcohol-quality and density-quality have already been determined to be 0.436 and -0.318, respectively, it is expected that alcohol and quality are positively correlated and dentiy and quality are negatively correlated. These relationships can easily be seen in the generated scatter plot with the majority of higher quality wines in the upper left hand corner having higher amounts of alcohol and lower densities. There are a few exceptions though in the lower right hand corner, indicating a few high quality wines have lower alcohol content and higher densities.
+
+#### Figure 20 - Chlorides vs Density w/o Chloride Outliers Final Scatter Plot
+```{r}
+# Plot chloride vs density scatter plotswith quality as a third variable w/ and w/o chloride outliers
+chlorine_density_2 + 
+  geom_jitter(width = 0.001, height = 0.0001, alpha = 0.5, size = 2,
+              aes(color = factor(quality)))
+```
+
+In Figure 20, the chloride vs density scatter plot is graphed with quality as a third variable. The figure indicates chloride and density are positively correlated. This correlation strengthens from a Pearson correlation of 0.262 to 0.499 after removing outliers in the chloride data set. This finding shows that the majority of the data has a moderately strong correlation between chlorides and density. By encoding the quality variable through color, it can be seen that quality increases in the lower left hand corner of each graph with lower density and lower chlorides content. The value of the Pearson correlation coefficient for chlorides-quality is -0.278.
+
+#### Figure 21 - Average Alcohol and Average Residual Sugar Final Scatter Plot with Density
+```{r}
+# Plot scatter plot of avg sugar vs density encoding color with avg alcohol
+ggplot(aes(density, sugar_mean), data = wines_avg_alcohol_sugar) +
+  geom_jitter(aes(color = alcohol_mean), alpha = 0.5, size = 2) +
+  xlab('Density (g/mL)') +
+  ylab('Avg Residual Sugar (g/L)') +
+  scale_color_continuous(name="Avg ABV (%)",                 
+                            breaks = c(9, 10, 11, 12, 13, 14), 
+                            labels = c("9", "10", "11", "12", "13", "14"),
+                            low = "turquoise",
+                            high = "midnightblue") +
+  scale_x_continuous(limits = c(0.985, 1.0025), breaks = seq(0.985, 1.0025,
+                                                             by = 0.0025)) +
+  scale_y_continuous(limits = c(0, 22.5), breaks = seq(0, 22.5, by = 2.5))
+```
+
+As indicated in the attached description of attributes, density is mainly affected by two other variables: alcohol and residual sugar content. Thus, in Figure 21, the mean residual sugar content is plotted against density. Average alcohol content is encoded through color. It can be observed that both avg residual sugar and average ABV are highly correlated with one another and density. The Pearson correlation coefficients for sugar_mean-density, alcohol_mean-density, and sugar_mean-alcohol_mean were calculated to be 0.906, -0.901, and -0.686, respectively.
+
+## Reflection
+
+In this report, the effects of density, alcohol, chlorides, and residual sugar content on wine quality were analyzed. The respective negative and positive effects of average alcohol and average residual sugar content on density were also successfully quantified. However, in each of the four variables analyzed, wines of a quality rating 3 or 4 defied the overall trend of the rest of the data and features that caused this were not sucessfully identified. Thus, an area of further exploration would be to analyze which qualities make critics rate wines below average (quality of 5). 
+
+## Sources
+P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis. Modeling wine preferences by data mining from physicochemical properties. In Decision Support Systems, Elsevier, 47(4):547-553. ISSN: 0167-9236.
+  
+Kassambara. (2017, September 01). Ggplot2 - Easy Way to Mix Multiple Graphs on The Same Page.
+Retrieved January 16, 2018, from http://www.sthda.com/english/articles/24-ggpubr-publication-ready-plots/81-ggplot2-easy-way-to-mix-multiple-graphs-on-the-same-page/
+
+Rokicki, S. (1970, January 01). R for Public Health. Retrieved January 16, 2018, from http://rforpublichealth.blogspot.com/2013/11/ggplot2-cheatsheet-for-scatterplots.html
